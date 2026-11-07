@@ -64,27 +64,16 @@ VIRAL_COSMIC_PROMPTS = [
     "The Pillars of Creation: Giant towers of gas and dust birthing new solar systems",
     "Why moving at the speed of light means you never experience time at all",
     "Dark Energy: The mysterious 68% of the universe that is tearing space apart",
-
-    "3 brutal money truths 99% of people realize too late in life",
-    "How the top 1% use debt to become richer while the poor stay broke",
-    "Warren Buffett's 5/25 rule for extreme wealth and focus",
-    "The silent psychological money trap keeping most people poor",
-    "3 dark tricks luxury brands use to make you feel broke",
-    "Why saving money in a bank account is a guaranteed loss",
-    "The 24-hour rule millionaires use before spending any money",
-    "How self-made billionaires think about risk and asymmetric bets",
-    "3 daily financial habits that separate the rich from the middle class",
-    "The psychology of compounding interest: How small habits build empires",
-    "Why a monthly salary is the drug employers give you to forget your ambition",
-    "The unspoken rules of wealth they intentionally never taught in school",
-    "How to negotiate business deals and salary like a high-stakes closer",
-    "Why truly wealthy people practice stealth wealth and never brag",
-    "The asset vs liability mindset explained in under 30 seconds",
-    "The psychological difference between being rich and being truly wealthy",
-    "How money amplifies who you truly are inside",
-    "The 3 financial leaks draining your net worth without you knowing",
+    "Oumuamua: Was the first interstellar object visiting our solar system alien technology?",
+    "The Dyson Sphere: How advanced alien civilizations could harvest entire stars",
+    "Neutron stars: A single teaspoon weighs more than Mount Everest",
+    "The multiverse theory: Are infinite versions of you living in parallel dimensions?",
+    "What happens when the Andromeda galaxy collides with our Milky Way?",
+    "KIC 8462852: The star whose light fluctuations science still cannot explain",
+    "The cosmic horizon: The point in space we will never be able to see",
+    "Solar superstorms: The Carrington Event that could fry our entire power grid",
+    "The dark matter mystery: Why 85% of cosmic mass is completely invisible"
 ]
-
 
 def pick_viral_topic() -> str:
     """
@@ -99,12 +88,13 @@ def pick_viral_topic() -> str:
         try:
             import requests
 
-            past_list_str = "\n- ".join(past_topics[-15:]) if past_topics else "None"
+                        past_list_str = "
+- ".join(past_topics[-15:]) if past_topics else "None"
             prompt = f"""
-We have ALREADY published YouTube Shorts about these wealth & finance topics:
+We have ALREADY published YouTube Shorts about these cosmic & space topics:
 - {past_list_str}
 
-CRITICAL RULE: Suggest ONE brand new, fresh, high-status YouTube Shorts topic in English about wealth mindset, millionaire psychology, money traps, or asymmetric investing.
+CRITICAL RULE: Suggest ONE brand new, mind-bending YouTube Shorts topic in English about space exploration, astrophysics, black holes, cosmic anomalies, alien signals, or deep universe mysteries.
 Do NOT duplicate or repeat the ideas above.
 Return ONLY the topic sentence, under 10 words, no quotes.
 """
@@ -129,7 +119,7 @@ Return ONLY the topic sentence, under 10 words, no quotes.
 
 def run_autopilot(privacy_status: str = "scheduled"):
     print("=" * 60)
-    print("      24/7 AUTONOMOUS WEALTH & FINANCE SHORTS ENGINE      ")
+    print("      24/7 AUTONOMOUS COSMIC SECRETS SHORTS ENGINE      ")
     print("=" * 60)
 
     # 1. Pick unique topic
@@ -145,10 +135,10 @@ def run_autopilot(privacy_status: str = "scheduled"):
         with open(meta_path, "r", encoding="utf-8") as f:
             meta = json.load(f)
         title = meta.get("title", f"{topic.title()} #shorts")
-        description = meta.get("description", f"{topic} #shorts #money #wealth #mindset")
+        description = meta.get("description", f"{topic} #shorts #space #astronomy #universe #cosmic #science")
     else:
         title = f"{topic.title()} #shorts"
-        description = f"The hidden truth about {topic}. Subscribe for daily wealth insights! #shorts #money #wealth"
+        description = f"The hidden mystery of {topic}. Subscribe for daily cosmic insights! #shorts #space #astronomy #universe #cosmic"
 
     tags = ["shorts", "space", "astronomy", "universe", "blackhole", "science", "astrophysics", "cosmos"]
 
