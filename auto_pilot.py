@@ -75,6 +75,7 @@ VIRAL_COSMIC_PROMPTS = [
     "The dark matter mystery: Why 85% of cosmic mass is completely invisible"
 ]
 
+
 def pick_viral_topic() -> str:
     """
     Picks a fresh viral English topic using Gemini or the curated list,
@@ -88,16 +89,15 @@ def pick_viral_topic() -> str:
         try:
             import requests
 
-                        past_list_str = "
-- ".join(past_topics[-15:]) if past_topics else "None"
-            prompt = f"""
-We have ALREADY published YouTube Shorts about these cosmic & space topics:
-- {past_list_str}
-
-CRITICAL RULE: Suggest ONE brand new, mind-bending YouTube Shorts topic in English about space exploration, astrophysics, black holes, cosmic anomalies, alien signals, or deep universe mysteries.
-Do NOT duplicate or repeat the ideas above.
-Return ONLY the topic sentence, under 10 words, no quotes.
-"""
+            past_list_str = "\\n- ".join(past_topics[-15:]) if past_topics else "None"
+            prompt = (
+                "We have ALREADY published YouTube Shorts about these cosmic & space topics:\\n"
+                f"- {past_list_str}\\n\\n"
+                "CRITICAL RULE: Suggest ONE brand new, mind-bending YouTube Shorts topic in English about "
+                "space exploration, astrophysics, black holes, cosmic anomalies, alien signals, or deep universe mysteries.\\n"
+                "Do NOT duplicate or repeat the ideas above.\\n"
+                "Return ONLY the topic sentence, under 10 words, no quotes."
+            )
             r = requests.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key={api_key}",
                 json={"contents": [{"parts": [{"text": prompt}]}]},
@@ -110,8 +110,7 @@ Return ONLY the topic sentence, under 10 words, no quotes.
         except Exception:
             pass
 
-    # Fallback to curated list
-    available = [p for p in VIRAL_COSMIC_PROMPTS if p.lower() not in past_topics]
+    available = [t for t in VIRAL_COSMIC_PROMPTS if t.lower() not in past_topics]
     if not available:
         available = VIRAL_COSMIC_PROMPTS
     return random.choice(available)
@@ -122,15 +121,15 @@ def run_autopilot(privacy_status: str = "scheduled"):
     print("      24/7 AUTONOMOUS COSMIC SECRETS SHORTS ENGINE      ")
     print("=" * 60)
 
-    # 1. Pick unique topic
+    # 1. Pick viral topic
     topic = pick_viral_topic()
-    print(f"\n[AUTOPILOT] Selected Topic: '{topic}'")
+    print(f"\n[TOPIC SELECTED] {topic}")
 
-    # 2. Build video
+    # 2. Build complete Short video
     video_path = build_shorts_video(topic)
 
     # 3. Load generated metadata
-    meta_path = video_path.with_suffix(".json")
+    meta_path = video_path.with_name(video_path.stem + "_metadata.json")
     if meta_path.exists():
         with open(meta_path, "r", encoding="utf-8") as f:
             meta = json.load(f)
@@ -140,7 +139,7 @@ def run_autopilot(privacy_status: str = "scheduled"):
         title = f"{topic.title()} #shorts"
         description = f"The hidden mystery of {topic}. Subscribe for daily cosmic insights! #shorts #space #astronomy #universe #cosmic"
 
-    tags = ["shorts", "space", "astronomy", "universe", "blackhole", "science", "astrophysics", "cosmos"]
+    tags = ["shorts", "space", "astronomy", "universe", "cosmic", "science", "blackhole", "deepspace", "astrophysics"]
 
     # 4. Upload to YouTube
     print(f"\n[AUTOPILOT] Uploading to YouTube ({privacy_status})...")
@@ -149,14 +148,39 @@ def run_autopilot(privacy_status: str = "scheduled"):
         title=title,
         description=description,
         tags=tags,
-        privacy_status=privacy_status,
+        privacy_status=privacy_status
     )
 
-    # 4b. Cross-post to Facebook Reels & TikTok if credentials are configured
-    upload_to_facebook_reels(video_path=video_path, description=f"{title}\n\n{description}")
-    upload_to_tiktok(video_path=video_path, title=title)
+    # 5. Dual publishing to Facebook Reels & TikTok
+    fb_page_id = os.getenv("FB_PAGE_ID", "").strip()
+    fb_page_token = os.getenv("FB_PAGE_TOKEN", "").strip()
+    if fb_page_id and fb_page_token:
+        print(f"\n[MULTI-PLATFORM] Publishing to Facebook Reels (Page ID: {fb_page_id[:4]}***)...")
+        fb_res = upload_to_facebook_reels(
+            video_path=video_path,
+            description=f"{title}\n\n{description}",
+            page_id=fb_page_id,
+            page_access_token=fb_page_token
+        )
+        if fb_res.get("success"):
+            print(f"[SUCCESS] Published to Facebook Reels: {fb_res.get('url')}")
+        else:
+            print(f"[WARN] Facebook Reels upload issue: {fb_res.get('error')}")
 
-    # 5. Log to history
+    tiktok_token = os.getenv("TIKTOK_ACCESS_TOKEN", "").strip()
+    if tiktok_token:
+        print("\n[MULTI-PLATFORM] Publishing to TikTok...")
+        tt_res = upload_to_tiktok(
+            video_path=video_path,
+            title=title,
+            access_token=tiktok_token
+        )
+        if tt_res.get("success"):
+            print(f"[SUCCESS] Published to TikTok: {tt_res.get('publish_id')}")
+        else:
+            print(f"[WARN] TikTok upload issue: {tt_res.get('error')}")
+
+    # 6. Save to history
     save_to_history(topic=topic, title=title, url=url)
     print("\n" + "=" * 60)
     print(f"[SUCCESS] Cosmic Short Live on YouTube: {url}")
@@ -165,13 +189,11 @@ def run_autopilot(privacy_status: str = "scheduled"):
 
 
 if __name__ == "__main__":
-    is_public = "--public" in sys.argv
-    is_private = "--private" in sys.argv
-    if is_public:
+    privacy = "scheduled"
+    if "--public" in sys.argv:
         privacy = "public"
-    elif is_private:
+    elif "--unlisted" in sys.argv:
+        privacy = "unlisted"
+    elif "--private" in sys.argv:
         privacy = "private"
-    else:
-        # Default to unlisted for spam flag & algorithmic indexing protection
-        privacy = "scheduled"
     run_autopilot(privacy_status=privacy)
