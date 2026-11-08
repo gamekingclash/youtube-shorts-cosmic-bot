@@ -152,33 +152,8 @@ def run_autopilot(privacy_status: str = "scheduled"):
     )
 
     # 5. Dual publishing to Facebook Reels & TikTok
-    fb_page_id = os.getenv("FB_PAGE_ID", "").strip()
-    fb_page_token = os.getenv("FB_PAGE_TOKEN", "").strip()
-    if fb_page_id and fb_page_token:
-        print(f"\n[MULTI-PLATFORM] Publishing to Facebook Reels (Page ID: {fb_page_id[:4]}***)...")
-        fb_res = upload_to_facebook_reels(
-            video_path=video_path,
-            description=f"{title}\n\n{description}",
-            page_id=fb_page_id,
-            page_access_token=fb_page_token
-        )
-        if fb_res.get("success"):
-            print(f"[SUCCESS] Published to Facebook Reels: {fb_res.get('url')}")
-        else:
-            print(f"[WARN] Facebook Reels upload issue: {fb_res.get('error')}")
-
-    tiktok_token = os.getenv("TIKTOK_ACCESS_TOKEN", "").strip()
-    if tiktok_token:
-        print("\n[MULTI-PLATFORM] Publishing to TikTok...")
-        tt_res = upload_to_tiktok(
-            video_path=video_path,
-            title=title,
-            access_token=tiktok_token
-        )
-        if tt_res.get("success"):
-            print(f"[SUCCESS] Published to TikTok: {tt_res.get('publish_id')}")
-        else:
-            print(f"[WARN] TikTok upload issue: {tt_res.get('error')}")
+    upload_to_facebook_reels(video_path=video_path, description=f"{title}\n\n{description}")
+    upload_to_tiktok(video_path=video_path, title=title)
 
     # 6. Save to history
     save_to_history(topic=topic, title=title, url=url)
