@@ -52,7 +52,7 @@ Return ONLY valid JSON with this exact structure:
   "description": "Engaging description with 5 relevant astronomy and space hashtags",
   "scenes": [
     {{
-      "narration": "1-2 punchy spoken sentences for this scene (plain text, no emojis or stage directions).",
+      "narration": "1-2 punchy spoken sentences for this scene with natural punctuation (commas, periods, question marks, dashes) to guide realistic voice pauses and intonation (plain text, no emojis or stage directions).",
       "search_query": "2-3 simple English keywords for stock video (e.g. 'galaxy spinning space', 'black hole event horizon', 'nebula stars deep space', 'earth from orbit', 'telescope night sky')",
       "image_prompt": "Cinematic visual description"
     }}
@@ -62,6 +62,7 @@ Rules:
 - Create 4 to 5 scenes total.
 - Scene 1 narration MUST start with a complete, mind-blowing cosmic hook sentence under 8 words (e.g. 'Something is moving through our galaxy.') that stops scrolling in the first 1.5 seconds.
 - Final scene MUST end with a chilling cosmic question or awe-inspiring revelation.
+- Use deliberate punctuation (commas, dashes) so speech synthesis flows with dramatic, human-like cadence.
 """
         for model_name in ["gemini-flash-lite-latest", "gemini-flash-latest"]:
             try:
@@ -123,14 +124,16 @@ def generate_tts_with_word_timings(text: str, audio_path: Path) -> list[dict]:
     Synthesizes speech using edge-tts with precise word boundaries for dynamic captions.
     Voice: en-US-ChristopherNeural with 1.1x speed (rate=+10%).
     """
-    voice = os.getenv("TTS_VOICE", "en-US-ChristopherNeural").strip()
+    voice = os.getenv("TTS_VOICE", "en-US-BrianNeural").strip()
+    if voice == "en-US-ChristopherNeural":
+        voice = "en-US-BrianNeural"
     word_timings = []
 
     clean_text = re.sub(r"[\*\_#`]+", "", text)
     clean_text = re.sub(r"^\d+[\.\)]\s*", "", clean_text).strip()
 
     async def _run():
-        communicate = edge_tts.Communicate(clean_text, voice, rate="+10%", boundary="WordBoundary")
+        communicate = edge_tts.Communicate(clean_text, voice, rate="+5%", boundary="WordBoundary")
         with open(audio_path, "wb") as f:
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
@@ -153,7 +156,7 @@ def generate_tts_with_word_timings(text: str, audio_path: Path) -> list[dict]:
         asyncio.run(_run())
     except Exception as e:
         print(f"[WARN] edge-tts stream failed: {e}. Retrying without word boundaries...")
-        communicate = edge_tts.Communicate(clean_text, voice, rate="+10%")
+        communicate = edge_tts.Communicate(clean_text, voice, rate="+5%")
         asyncio.run(communicate.save(str(audio_path)))
         try:
             import wave
