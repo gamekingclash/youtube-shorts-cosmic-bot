@@ -604,6 +604,8 @@ def upload_long_youtube(
                 "james webb", "astrophysics", "science", "cosmos", "deep space", "fermi paradox"
             ],
             "categoryId": "28",  # Science & Technology
+            "defaultLanguage": "en",
+            "defaultAudioLanguage": "en",
         },
         "status": {
             "privacyStatus": "private" if privacy_status == "scheduled" else privacy_status,

@@ -106,6 +106,8 @@ def upload_shorts_video(
             "description": description,
             "tags": tags,
             "categoryId": "22",  # People & Blogs / Entertainment
+            "defaultLanguage": "en",
+            "defaultAudioLanguage": "en",
         },
         "status": {
             "privacyStatus": "private" if privacy_status == "scheduled" else privacy_status,
