@@ -35,14 +35,17 @@ def load_history() -> list[dict]:
     return []
 
 
-def save_to_history(topic: str, title: str, url: str):
+def save_to_history(topic: str, title: str, url: str, publish_at: str = None):
     history = load_history()
-    history.append({
+    entry = {
         "topic": topic,
         "title": title,
         "url": url,
         "timestamp": datetime.now().isoformat(timespec="seconds")
-    })
+    }
+    if publish_at:
+        entry["publish_at"] = publish_at
+    history.append(entry)
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, indent=2, ensure_ascii=False)
 
@@ -89,13 +92,13 @@ def pick_viral_topic() -> str:
         try:
             import requests
 
-            past_list_str = "\\n- ".join(past_topics[-15:]) if past_topics else "None"
+            past_list_str = "\n- ".join(past_topics[-15:]) if past_topics else "None"
             prompt = (
-                "We have ALREADY published YouTube Shorts about these cosmic & space topics:\\n"
-                f"- {past_list_str}\\n\\n"
+                "We have ALREADY published YouTube Shorts about these cosmic & space topics:\n"
+                f"- {past_list_str}\n\n"
                 "CRITICAL RULE: Suggest ONE brand new, mind-bending YouTube Shorts topic in English about "
-                "space exploration, astrophysics, black holes, cosmic anomalies, alien signals, or deep universe mysteries.\\n"
-                "Do NOT duplicate or repeat the ideas above.\\n"
+                "space exploration, astrophysics, black holes, cosmic anomalies, alien signals, or deep universe mysteries.\n"
+                "Do NOT duplicate or repeat the ideas above.\n"
                 "Return ONLY the topic sentence, under 10 words, no quotes."
             )
             r = requests.post(
@@ -128,16 +131,20 @@ def run_autopilot(privacy_status: str = "scheduled"):
     # 2. Build complete Short video
     video_path = build_shorts_video(topic)
 
-    # 3. Load generated metadata
-    meta_path = video_path.with_name(video_path.stem + "_metadata.json")
+    # 3. Load generated metadata (supports both .json and _metadata.json)
+    meta_path = video_path.with_suffix(".json")
+    if not meta_path.exists():
+        meta_path = video_path.with_name(video_path.stem + "_metadata.json")
+    clean_topic = topic.strip().rstrip("?.!")
+    fallback_title = clean_topic[:55].rsplit(" ", 1)[0].rstrip(".,:-") if len(clean_topic) > 55 else clean_topic
     if meta_path.exists():
         with open(meta_path, "r", encoding="utf-8") as f:
             meta = json.load(f)
-        title = meta.get("title", f"{topic.title()} #shorts")
-        description = meta.get("description", f"{topic} #shorts #space #astronomy #universe #cosmic #science")
+        title = meta.get("title", f"{fallback_title} #shorts")
+        description = meta.get("description", f"Exploring {clean_topic} in deep space. #shorts #space #astronomy #universe #cosmic #science")
     else:
-        title = f"{topic.title()} #shorts"
-        description = f"The hidden mystery of {topic}. Subscribe for daily cosmic insights! #shorts #space #astronomy #universe #cosmic"
+        title = f"{fallback_title} #shorts"
+        description = f"Exploring {clean_topic} in deep space. Subscribe for daily cosmic insights! #shorts #space #astronomy #universe #cosmic"
 
     tags = ["shorts", "space", "astronomy", "universe", "cosmic", "science", "blackhole", "deepspace", "astrophysics"]
 
@@ -156,7 +163,8 @@ def run_autopilot(privacy_status: str = "scheduled"):
     upload_to_tiktok(video_path=video_path, title=title)
 
     # 6. Save to history
-    save_to_history(topic=topic, title=title, url=url)
+    import uploader as _uploader
+    save_to_history(topic=topic, title=title, url=url, publish_at=getattr(_uploader, "LAST_SCHEDULED_PUBLISH_AT", None))
     print("\n" + "=" * 60)
     print(f"[SUCCESS] Cosmic Short Live on YouTube: {url}")
     print("=" * 60)

@@ -76,6 +76,61 @@ def get_authenticated_service():
     )
 
 
+LAST_SCHEDULED_PUBLISH_AT = None
+
+
+def _load_scheduled_times(history_file: Path) -> list:
+    """Reads recent scheduled/published UTC datetimes from history.json to prevent wave collisions."""
+    from datetime import datetime, timezone
+
+    times = []
+    if not history_file.exists():
+        return times
+    try:
+        items = json.loads(history_file.read_text(encoding="utf-8"))
+        for item in items[-10:]:
+            raw_ts = item.get("publish_at") or item.get("timestamp")
+            if not raw_ts:
+                continue
+            try:
+                dt = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                times.append(dt)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return times
+
+
+def get_next_cosmic_publish_time(now_utc) -> object:
+    """Returns the next US prime-time publishAt datetime (UTC) for Cosmic Shorts."""
+    from datetime import timedelta
+
+    min_ready = now_utc + timedelta(minutes=25)
+    occupied = _load_scheduled_times(BASE_DIR / "history.json")
+    candidates = []
+    for day_offset in range(0, 3):
+        day_base = (now_utc + timedelta(days=day_offset)).replace(second=0, microsecond=0)
+        # 20:30 UTC (23:30 TRT / 15:30 EST) and 00:30 UTC (03:30 TRT / 19:30 EST)
+        candidates.append(day_base.replace(hour=0, minute=30))
+        candidates.append(day_base.replace(hour=20, minute=30))
+    candidates.sort()
+
+    for slot in candidates:
+        if slot < min_ready:
+            continue
+        if any(abs((slot - occ).total_seconds()) < 3 * 3600 for occ in occupied):
+            continue
+        return slot
+
+    for slot in candidates:
+        if slot >= min_ready:
+            return slot
+    return min_ready
+
+
 def upload_shorts_video(
     video_path: Path,
     title: str,
@@ -118,11 +173,18 @@ def upload_shorts_video(
     if privacy_status == "scheduled":
         from datetime import datetime, timedelta, timezone
 
-        publish_time = datetime.now(timezone.utc) + timedelta(hours=schedule_hours)
-        body["status"]["publishAt"] = publish_time.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        global LAST_SCHEDULED_PUBLISH_AT
+        now_utc = datetime.now(timezone.utc)
+        publish_time = get_next_cosmic_publish_time(now_utc)
+        publish_iso = publish_time.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        LAST_SCHEDULED_PUBLISH_AT = publish_iso
+        body["status"]["publishAt"] = publish_iso
+        trt_time = publish_time + timedelta(hours=3)
+        est_time = publish_time - timedelta(hours=5)
         print(
             f"[YOUTUBE] Video scheduled to automatically go PUBLIC at: "
-            f"{publish_time.strftime('%Y-%m-%d %H:%M:%S UTC')} ({schedule_hours} hours from now)."
+            f"{publish_time.strftime('%Y-%m-%d %H:%M:%S UTC')} "
+            f"({trt_time.strftime('%H:%M')} TRT / {est_time.strftime('%H:%M')} EST)."
         )
 
     media = MediaFileUpload(

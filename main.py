@@ -35,7 +35,7 @@ def ensure_dirs():
 def generate_script_and_metadata(topic: str) -> dict:
     """
     Generates an engaging, high-retention English YouTube Shorts script, title, description,
-    and visual stock search queries about Finance, Wealth Mindset, and Investing.
+    and visual stock search queries about Space, Astrophysics, Black Holes, and Cosmic Mysteries.
     """
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if api_key:
@@ -78,6 +78,11 @@ Rules:
                     if match:
                         parsed = json.loads(match.group(0))
                         if "scenes" in parsed and len(parsed["scenes"]) > 0:
+                            t_raw = parsed.get("title", topic).strip()
+                            t_raw = re.sub(r"#shorts", "", t_raw, flags=re.IGNORECASE).strip()
+                            if len(t_raw) > 55:
+                                t_raw = t_raw[:55].rsplit(" ", 1)[0].rstrip(".,:-")
+                            parsed["title"] = f"{t_raw} #shorts"
                             print(f"[OK] Script generated via Google Gemini API ({model_name}).")
                             return parsed
                 else:
@@ -88,32 +93,33 @@ Rules:
     # Fallback script generator
     clean_topic = topic.strip().rstrip("?.!")
     print(f"[INFO] Generating Cosmic Secrets Shorts script for topic: '{clean_topic}'")
+    fallback_title = clean_topic[:55].rsplit(" ", 1)[0].rstrip(".,:-") if len(clean_topic) > 55 else clean_topic
     return {
-        "title": f"The Brutal Truth About {clean_topic.title()} #shorts",
+        "title": f"{fallback_title} #shorts",
         "description": (
-            f"Here is what 99% of people never understand about {clean_topic}. "
-            f"Watch until the end to change your perspective on wealth! #shorts #space #astronomy #universe #cosmic #science"
+            f"Exploring {clean_topic} in deep space. "
+            f"Subscribe for daily cosmic discoveries! #shorts #space #astronomy #universe #cosmic #science"
         ),
         "scenes": [
             {
-                "narration": f"Here is the brutal truth about {clean_topic} that the top 1% understands, but most people never will.",
-                "search_query": "luxury watch cash",
-                "image_prompt": "Ultra luxury watch and counting cash in dark cinematic lighting",
+                "narration": f"Scientists still struggle to explain what happens in deep space when you encounter {clean_topic}.",
+                "search_query": "black hole event horizon",
+                "image_prompt": "Cinematic glowing black hole event horizon bending starlight in deep space",
             },
             {
-                "narration": "Most people stay broke not because of how much they earn, but because of the hidden psychological money traps they fall for daily.",
-                "search_query": "wall street stock market",
-                "image_prompt": "Wall Street stock exchange floor fast motion",
+                "narration": "Out beyond our solar system, extreme gravity bends both space and time in ways that shatter everyday physics.",
+                "search_query": "galaxy spinning space",
+                "image_prompt": "Vast spiral galaxy rotating in deep cosmic darkness",
             },
             {
-                "narration": "True wealth is not about showing off expensive depreciating toys. It is about buying your time and financial sovereignty.",
-                "search_query": "penthouse city skyline",
-                "image_prompt": "Modern luxury high-rise penthouse overlooking nocturnal city skyline",
+                "narration": "Modern space telescopes are only beginning to uncover these violent cosmic phenomena hidden billions of light-years away.",
+                "search_query": "nebula stars deep space",
+                "image_prompt": "Glowing cosmic nebula clouds filled with newborn stars",
             },
             {
-                "narration": "The moment you start acquiring income-producing assets instead of liabilities, you stop working for money, and money starts working for you.",
-                "search_query": "supercar night drive",
-                "image_prompt": "Cinematic night drive in modern luxury sports car",
+                "narration": "Every new discovery proves the universe is far stranger and more dangerous than we ever imagined.",
+                "search_query": "earth from orbit",
+                "image_prompt": "Blue planet Earth seen from orbital darkness surrounded by stars",
             },
         ],
     }
