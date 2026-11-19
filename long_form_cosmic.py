@@ -48,7 +48,7 @@ FORBIDDEN_TAGS = {
     "stickman", "cartoon", "baby", "kid", "child", "massage", "spa", "flower",
     "yoga", "fitness", "horror", "creepy", "blood", "zombie", "cute", "funny",
     "green screen", "greenscreen", "chroma", "chromakey", "template",
-    "subscribe", "button", "animation", "3d", "vfx", "isolated", "emoji"
+    "subscribe", "button", "isolated", "emoji"
 }
 
 COSMIC_VIDEO_QUERIES = [
@@ -371,29 +371,31 @@ def fetch_landscape_media(query: str, visual_type: str, min_duration: int = 8) -
     used = get_used_clips()
     q_encoded = quote(query)
 
-    # 1. Video
+    # 1. Video (try film first, then all for 3D space simulations)
     if visual_type == "video":
-        url = f"https://pixabay.com/api/videos/?key={api_key}&q={q_encoded}&video_type=film&per_page=15"
-        try:
-            r = requests.get(url, timeout=12)
-            if r.status_code == 200:
-                hits = r.json().get("hits", [])
-                for hit in hits:
-                    hit_id = f"px_v_{hit.get('id')}"
-                    if hit_id in used:
-                        continue
-                    tags = set(t.strip().lower() for t in hit.get("tags", "").split(","))
-                    if tags & FORBIDDEN_TAGS:
-                        continue
-                    if hit.get("duration", 0) < min_duration:
-                        continue
-                    videos = hit.get("videos", {})
-                    for q in ["large", "medium", "small"]:
-                        v_info = videos.get(q, {})
-                        if v_info and v_info.get("width", 0) >= v_info.get("height", 0):
-                            return v_info.get("url"), hit_id
-        except Exception:
-            pass
+        for vtype in ("film", "all"):
+            url = f"https://pixabay.com/api/videos/?key={api_key}&q={q_encoded}&video_type={vtype}&per_page=15"
+            try:
+                r = requests.get(url, timeout=12)
+                if r.status_code == 200:
+                    hits = r.json().get("hits", [])
+                    for hit in hits:
+                        hit_id = f"px_v_{hit.get('id')}"
+                        if hit_id in used:
+                            continue
+                        raw_tags = hit.get("tags", "").lower()
+                        tags = set(t.strip().lower() for t in raw_tags.split(","))
+                        if tags & FORBIDDEN_TAGS or "green" in raw_tags or "chroma" in raw_tags:
+                            continue
+                        if hit.get("duration", 0) < min_duration:
+                            continue
+                        videos = hit.get("videos", {})
+                        for q in ["large", "medium", "small"]:
+                            v_info = videos.get(q, {})
+                            if v_info and v_info.get("width", 0) >= v_info.get("height", 0):
+                                return v_info.get("url"), hit_id
+            except Exception:
+                pass
 
     # 2. Photo (fallback or explicit visual_type == 'photo')
     url_img = f"https://pixabay.com/api/?key={api_key}&q={q_encoded}&image_type=photo&orientation=horizontal&per_page=15"

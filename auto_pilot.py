@@ -92,12 +92,13 @@ def pick_viral_topic() -> str:
         try:
             import requests
 
-            past_list_str = "\n- ".join(past_topics[-15:]) if past_topics else "None"
+            past_list_str = "\n- ".join(past_topics[-80:]) if past_topics else "None"
             prompt = (
                 "We have ALREADY published YouTube Shorts about these cosmic & space topics:\n"
                 f"- {past_list_str}\n\n"
                 "CRITICAL RULE: Suggest ONE brand new, mind-bending YouTube Shorts topic in English about "
-                "space exploration, astrophysics, black holes, cosmic anomalies, alien signals, or deep universe mysteries.\n"
+                "space exploration, astrophysics, black holes, cosmic anomalies, or deep universe mysteries.\n"
+                "Prefer high-curiosity 'What Happens If/When...' or 'Why...' questions about real astrophysics/space phenomena.\n"
                 "Do NOT duplicate or repeat the ideas above.\n"
                 "Return ONLY the topic sentence, under 10 words, no quotes."
             )

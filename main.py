@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import textwrap
+import time
 import wave
 from pathlib import Path
 from urllib.parse import quote
@@ -65,30 +66,35 @@ Rules:
 - Use deliberate punctuation (commas, dashes) so speech synthesis flows with dramatic, human-like cadence.
 """
         for model_name in ["gemini-flash-lite-latest", "gemini-flash-latest"]:
-            try:
-                resp = requests.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}",
-                    json={"contents": [{"parts": [{"text": prompt}]}]},
-                    timeout=20,
-                )
-                if resp.status_code == 200:
-                    data_json = resp.json()
-                    raw = data_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    match = re.search(r"\{.*\}", raw, re.DOTALL)
-                    if match:
-                        parsed = json.loads(match.group(0))
-                        if "scenes" in parsed and len(parsed["scenes"]) > 0:
-                            t_raw = parsed.get("title", topic).strip()
-                            t_raw = re.sub(r"#shorts", "", t_raw, flags=re.IGNORECASE).strip()
-                            if len(t_raw) > 55:
-                                t_raw = t_raw[:55].rsplit(" ", 1)[0].rstrip(".,:-")
-                            parsed["title"] = f"{t_raw} #shorts"
-                            print(f"[OK] Script generated via Google Gemini API ({model_name}).")
-                            return parsed
-                else:
-                    print(f"[WARN] Gemini model {model_name} returned status {resp.status_code}")
-            except Exception as exc:
-                print(f"[WARN] Gemini API call ({model_name}) failed: {exc}")
+            for attempt in range(2):
+                try:
+                    resp = requests.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}",
+                        json={
+                            "contents": [{"parts": [{"text": prompt}]}],
+                            "generationConfig": {"responseMimeType": "application/json"},
+                        },
+                        timeout=22,
+                    )
+                    if resp.status_code == 200:
+                        data_json = resp.json()
+                        raw = data_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        match = re.search(r"\{.*\}", raw, re.DOTALL)
+                        if match:
+                            parsed = json.loads(match.group(0))
+                            if "scenes" in parsed and len(parsed["scenes"]) > 0:
+                                t_raw = parsed.get("title", topic).strip()
+                                t_raw = re.sub(r"#shorts", "", t_raw, flags=re.IGNORECASE).strip()
+                                if len(t_raw) > 55:
+                                    t_raw = t_raw[:55].rsplit(" ", 1)[0].rstrip(".,:-")
+                                parsed["title"] = f"{t_raw} #shorts"
+                                print(f"[OK] Script generated via Google Gemini API ({model_name}).")
+                                return parsed
+                    else:
+                        print(f"[WARN] Gemini model {model_name} attempt {attempt+1} returned status {resp.status_code}")
+                except Exception as exc:
+                    print(f"[WARN] Gemini API call ({model_name}) attempt {attempt+1} failed: {exc}")
+                time.sleep(1.5)
 
     # Fallback script generator
     clean_topic = topic.strip().rstrip("?.!")
@@ -379,27 +385,37 @@ FORBIDDEN_TAGS = {
     "stickman", "cartoon", "baby", "kid", "child", "massage", "spa", "flower",
     "yoga", "fitness", "horror", "creepy", "blood", "zombie", "cute", "funny", "bird", "birds", "avian", "wildlife", "nature", "tree", "plant", "forest", "wood",
     "green screen", "greenscreen", "chroma", "chromakey", "chroma key",
-    "template", "subscribe", "button", "animation", "3d", "vfx", "loop", "isolated"
+    "template", "subscribe", "button", "isolated"
 }
 
 CURATED_COSMIC_QUERIES = [
     "deep space stars galaxy nebula",
-    "supermassive black hole event horizon",
-    "milky way night sky stars timelapse",
-    "james webb space telescope deep field",
-    "cosmic dust interstellar nebula 4k",
-    "planet earth from space orbit atmosphere",
-    "solar flare sun surface cosmic",
-    "alien exoplanet deep universe astronomy",
-    "aurora borealis northern lights night sky",
-    "meteor shower shooting stars cosmos",
+    "black hole space",
+    "spiral galaxy space",
+    "milky way night sky stars",
+    "nebula cosmos stars",
+    "planet earth space orbit",
+    "solar flare sun space",
+    "exoplanet planet space",
+    "astronaut spacewalk orbit",
+    "saturn planet rings space",
+    "mars planet surface space",
+    "supernova explosion stars",
+    "asteroid comet space",
+    "moon craters space",
+    "aurora borealis night sky",
+    "meteor shower night sky",
+    "telescope observatory night sky",
+    "rocket launch space",
 ]
 
 REQUIRED_COSMIC_CONCEPTS = {
     "space", "galaxy", "universe", "stars", "star", "nebula", "planet",
     "astronomy", "cosmos", "cosmic", "black hole", "telescope", "sky",
     "night", "earth", "moon", "solar", "deep space", "milky way",
-    "supernova", "alien", "interstellar", "aurora", "meteor", "orbit"
+    "supernova", "alien", "interstellar", "aurora", "meteor", "orbit",
+    "astronaut", "saturn", "mars", "jupiter", "comet", "asteroid",
+    "eclipse", "sun", "spacecraft", "rocket", "astrophysics"
 }
 
 USED_CLIPS_FILE = BASE_DIR / "used_clips.json"
@@ -441,47 +457,48 @@ def fetch_pixabay_video(query: str, dest_path: Path, retry_with_curated: bool = 
 
     clean_query = re.sub(r"[^a-zA-Z0-9 ]+", " ", query).strip()
     clean_query = " ".join(clean_query.split()[:3])
-    # video_type=film strictly excludes cartoons, green screen templates, and VFX overlays!
-    url = f"https://pixabay.com/api/videos/?key={api_key}&q={quote(clean_query)}&video_type=film&per_page=30"
+    # Try film first, then all (including 3D/CGI space simulations) so black hole/galaxy queries never starve.
+    for vtype in ("film", "all"):
+        url = f"https://pixabay.com/api/videos/?key={api_key}&q={quote(clean_query)}&video_type={vtype}&per_page=30"
 
-    try:
-        resp = requests.get(url, timeout=12)
-        if resp.status_code == 200:
-            hits = resp.json().get("hits", [])
-            valid_hits = []
-            for hit in hits:
-                raw_tags = hit.get("tags", "").lower()
-                tags = set(t.strip().lower() for t in raw_tags.split(","))
-                if tags.intersection(FORBIDDEN_TAGS) or "green" in raw_tags or "chroma" in raw_tags:
-                    continue
-                if not any(req in raw_tags for req in REQUIRED_COSMIC_CONCEPTS):
-                    continue
-                clip_key = f"px_{hit.get('id')}"
-                if clip_key in SESSION_USED_VIDEO_IDS or hit.get("id") in SESSION_USED_VIDEO_IDS:
-                    continue
-                valid_hits.append(hit)
+        try:
+            resp = requests.get(url, timeout=12)
+            if resp.status_code == 200:
+                hits = resp.json().get("hits", [])
+                valid_hits = []
+                for hit in hits:
+                    raw_tags = hit.get("tags", "").lower()
+                    tags = set(t.strip().lower() for t in raw_tags.split(","))
+                    if tags.intersection(FORBIDDEN_TAGS) or "green" in raw_tags or "chroma" in raw_tags:
+                        continue
+                    if not any(req in raw_tags for req in REQUIRED_COSMIC_CONCEPTS):
+                        continue
+                    clip_key = f"px_{hit.get('id')}"
+                    if clip_key in SESSION_USED_VIDEO_IDS or hit.get("id") in SESSION_USED_VIDEO_IDS:
+                        continue
+                    valid_hits.append(hit)
 
-            random.shuffle(valid_hits)
-            for chosen_hit in valid_hits[:6]:
-                clip_key = f"px_{chosen_hit.get('id')}"
-                videos = chosen_hit.get("videos", {})
-                chosen = (
-                    videos.get("medium")
-                    or videos.get("large")
-                    or videos.get("small")
-                )
-                if chosen and chosen.get("url"):
-                    vid_resp = requests.get(chosen["url"], stream=True, timeout=25)
-                    if vid_resp.status_code == 200:
-                        with open(dest_path, "wb") as f:
-                            for chunk in vid_resp.iter_content(chunk_size=65536):
-                                f.write(chunk)
-                        if validate_video_file(dest_path):
-                            save_persistent_used_clip(clip_key)
-                            print(f"[OK] Downloaded unique cosmic stock video ({clip_key}) for '{clean_query}'.")
-                            return True
-    except Exception as exc:
-        print(f"[WARN] Pixabay fetch failed for '{clean_query}': {exc}")
+                random.shuffle(valid_hits)
+                for chosen_hit in valid_hits[:6]:
+                    clip_key = f"px_{chosen_hit.get('id')}"
+                    videos = chosen_hit.get("videos", {})
+                    chosen = (
+                        videos.get("medium")
+                        or videos.get("large")
+                        or videos.get("small")
+                    )
+                    if chosen and chosen.get("url"):
+                        vid_resp = requests.get(chosen["url"], stream=True, timeout=25)
+                        if vid_resp.status_code == 200:
+                            with open(dest_path, "wb") as f:
+                                for chunk in vid_resp.iter_content(chunk_size=65536):
+                                    f.write(chunk)
+                            if validate_video_file(dest_path):
+                                save_persistent_used_clip(clip_key)
+                                print(f"[OK] Downloaded unique cosmic stock video ({clip_key}, {vtype}) for '{clean_query}'.")
+                                return True
+        except Exception as exc:
+            print(f"[WARN] Pixabay fetch ({vtype}) failed for '{clean_query}': {exc}")
 
     if retry_with_curated:
         fallback_q = random.choice(CURATED_COSMIC_QUERIES)
