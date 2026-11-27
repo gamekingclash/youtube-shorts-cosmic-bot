@@ -2,10 +2,8 @@ name: Daily Cosmic Shorts & Reels Generator
 
 on:
   schedule:
-    # Wave 1 (Afternoon TRT)
-    - cron: '45 13 * * *'
-    # Wave 2 (Evening Prime Time TRT)
-    - cron: '15 19 * * *'
+    # Focused 1x/day US prime-time slot -> publishes at 20:30 UTC (23:30 TRT / 15:30 EST)
+    - cron: '45 15 * * *'
   workflow_dispatch:
 
 permissions:

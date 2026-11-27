@@ -105,23 +105,22 @@ def _load_scheduled_times(history_file: Path) -> list:
 
 
 def get_next_cosmic_publish_time(now_utc) -> object:
-    """Returns the next US prime-time publishAt datetime (UTC) for Cosmic Shorts."""
+    """Returns the next 1x/day US prime-time publishAt datetime (UTC) for Cosmic Shorts."""
     from datetime import timedelta
 
     min_ready = now_utc + timedelta(minutes=25)
     occupied = _load_scheduled_times(BASE_DIR / "history.json")
     candidates = []
-    for day_offset in range(0, 3):
+    for day_offset in range(0, 4):
         day_base = (now_utc + timedelta(days=day_offset)).replace(second=0, microsecond=0)
-        # 20:30 UTC (23:30 TRT / 15:30 EST) and 00:30 UTC (03:30 TRT / 19:30 EST)
-        candidates.append(day_base.replace(hour=0, minute=30))
+        # Single high-impact daily slot: 20:30 UTC (23:30 TRT / 15:30 EST)
         candidates.append(day_base.replace(hour=20, minute=30))
     candidates.sort()
 
     for slot in candidates:
         if slot < min_ready:
             continue
-        if any(abs((slot - occ).total_seconds()) < 3 * 3600 for occ in occupied):
+        if any(abs((slot - occ).total_seconds()) < 18 * 3600 for occ in occupied):
             continue
         return slot
 

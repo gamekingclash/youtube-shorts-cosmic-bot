@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -79,42 +80,100 @@ VIRAL_COSMIC_PROMPTS = [
 ]
 
 
+_COSMIC_STOP_WORDS = {
+    "that", "this", "with", "from", "your", "about", "what", "when", "where",
+    "which", "while", "into", "happens", "space", "cosmic", "universe", "galaxy",
+    "star", "planet", "shorts", "earth", "actually", "really", "could", "would",
+    "inside", "through", "coming", "deep",
+}
+
+
+def _norm_text(s: str) -> str:
+    s = re.sub(r"#shorts", "", s or "", flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9\s]", " ", s.lower())).strip()
+
+
+def _meaningful_tokens(s: str) -> set[str]:
+    return {w for w in _norm_text(s).split() if len(w) >= 4 and w not in _COSMIC_STOP_WORDS}
+
+
+def _is_duplicate_cosmic_item(candidate: str, history: list[dict]) -> bool:
+    cand_norm = _norm_text(candidate)
+    if not cand_norm:
+        return True
+    cand_tokens = _meaningful_tokens(cand_norm)
+    for item in history:
+        for field in ("topic", "title"):
+            past_norm = _norm_text(item.get(field, ""))
+            if past_norm and cand_norm == past_norm:
+                return True
+    for item in history[-80:]:
+        for field in ("topic", "title"):
+            past_tokens = _meaningful_tokens(item.get(field, ""))
+            if not cand_tokens or not past_tokens:
+                continue
+            overlap = cand_tokens & past_tokens
+            union = cand_tokens | past_tokens
+            if len(overlap) >= 2 and (len(overlap) / len(union) >= 0.45 or len(overlap) >= 3):
+                return True
+    return False
+
+
+def _ensure_unique_title(title: str, topic: str, history: list[dict]) -> str:
+    cand_norm = _norm_text(title)
+    past_titles = {_norm_text(item.get("title", "")) for item in history}
+    if cand_norm and cand_norm not in past_titles:
+        return title
+    clean_topic = re.sub(r"#shorts", "", topic or "", flags=re.IGNORECASE).strip().rstrip("?.!:-")
+    if len(clean_topic) > 50:
+        clean_topic = clean_topic[:50].rsplit(" ", 1)[0].rstrip(".,:-")
+    alt = f"{clean_topic} #shorts"
+    if _norm_text(alt) not in past_titles:
+        print(f"[DEDUP] Replaced duplicate title '{title}' -> '{alt}'")
+        return alt
+    return title
+
+
 def pick_viral_topic() -> str:
     """
     Picks a fresh viral English topic using Gemini or the curated list,
-    strictly avoiding any previously covered topics.
+    strictly avoiding any previously covered topics or titles.
     """
     history = load_history()
-    past_topics = [item.get("topic", "").lower() for item in history]
+    past_entries = [
+        f"{item.get('topic', '')} | Title: {item.get('title', '')}".strip()
+        for item in history[-80:]
+    ]
 
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if api_key:
         try:
             import requests
 
-            past_list_str = "\n- ".join(past_topics[-80:]) if past_topics else "None"
+            past_list_str = "\n- ".join(past_entries) if past_entries else "None"
             prompt = (
-                "We have ALREADY published YouTube Shorts about these cosmic & space topics:\n"
+                "We have ALREADY published YouTube Shorts about these cosmic & space topics and titles:\n"
                 f"- {past_list_str}\n\n"
                 "CRITICAL RULE: Suggest ONE brand new, mind-bending YouTube Shorts topic in English about "
                 "space exploration, astrophysics, black holes, cosmic anomalies, or deep universe mysteries.\n"
                 "Prefer high-curiosity 'What Happens If/When...' or 'Why...' questions about real astrophysics/space phenomena.\n"
-                "Do NOT duplicate or repeat the ideas above.\n"
+                "Do NOT duplicate or closely paraphrase ANY topic or title above.\n"
                 "Return ONLY the topic sentence, under 10 words, no quotes."
             )
-            r = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key={api_key}",
-                json={"contents": [{"parts": [{"text": prompt}]}]},
-                timeout=12,
-            )
-            if r.status_code == 200:
-                txt = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                if txt and len(txt) > 5 and txt.lower() not in past_topics:
-                    return txt.strip('"')
+            for _attempt in range(3):
+                r = requests.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key={api_key}",
+                    json={"contents": [{"parts": [{"text": prompt}]}]},
+                    timeout=12,
+                )
+                if r.status_code == 200:
+                    txt = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip().strip('"\'` ')
+                    if txt and len(txt) > 5 and not _is_duplicate_cosmic_item(txt, history):
+                        return txt
         except Exception:
             pass
 
-    available = [t for t in VIRAL_COSMIC_PROMPTS if t.lower() not in past_topics]
+    available = [t for t in VIRAL_COSMIC_PROMPTS if not _is_duplicate_cosmic_item(t, history)]
     if not available:
         available = VIRAL_COSMIC_PROMPTS
     return random.choice(available)
@@ -141,10 +200,10 @@ def run_autopilot(privacy_status: str = "scheduled"):
     if meta_path.exists():
         with open(meta_path, "r", encoding="utf-8") as f:
             meta = json.load(f)
-        title = meta.get("title", f"{fallback_title} #shorts")
+        title = _ensure_unique_title(meta.get("title", f"{fallback_title} #shorts"), topic, load_history())
         description = meta.get("description", f"Exploring {clean_topic} in deep space. #shorts #space #astronomy #universe #cosmic #science")
     else:
-        title = f"{fallback_title} #shorts"
+        title = _ensure_unique_title(f"{fallback_title} #shorts", topic, load_history())
         description = f"Exploring {clean_topic} in deep space. Subscribe for daily cosmic insights! #shorts #space #astronomy #universe #cosmic"
 
     tags = ["shorts", "space", "astronomy", "universe", "cosmic", "science", "blackhole", "deepspace", "astrophysics"]

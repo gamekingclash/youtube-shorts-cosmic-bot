@@ -33,6 +33,30 @@ def ensure_dirs():
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
+CHANNEL_DEFAULT_VOICE = "en-US-BrianMultilingualNeural"
+CHANNEL_TTS_RATE = "+3%"
+CHANNEL_TTS_PITCH = "-2Hz"
+_TRAILING_DANGLING_WORDS = {
+    "your", "to", "of", "in", "for", "the", "a", "an", "and", "or", "with", "from",
+    "how", "why", "that", "is", "are", "was", "were", "be", "completely", "secretly",
+    "quietly", "actually", "really", "always", "never", "truly", "still", "just", "very",
+    "into", "about", "before", "after", "without", "when", "while",
+}
+
+
+def _clean_cosmic_title(raw_title: str) -> str:
+    """Normalizes Cosmic Shorts titles cleanly without dangling trailing words."""
+    t = re.sub(r"#shorts", "", raw_title, flags=re.IGNORECASE).strip()
+    t = re.sub(r"\s+", " ", t).strip().rstrip(".,:-")
+    if len(t) > 52:
+        t = t[:52].rsplit(" ", 1)[0].rstrip(".,:-")
+    words = t.split()
+    while len(words) > 3 and words[-1].lower().strip(".,:;-?!") in _TRAILING_DANGLING_WORDS:
+        words.pop()
+    t = " ".join(words).rstrip(".,:-")
+    return f"{t} #shorts"
+
+
 def generate_script_and_metadata(topic: str) -> dict:
     """
     Generates an engaging, high-retention English YouTube Shorts script, title, description,
@@ -42,29 +66,31 @@ def generate_script_and_metadata(topic: str) -> dict:
     if api_key:
         prompt = f"""
 You are an elite YouTube Shorts scriptwriter specializing in Space, Astrophysics, Black Holes, James Webb Discoveries, and Cosmic Mysteries.
-Create a fast-paced, hook-driven 30-45 second YouTube Short about: "{topic}"
+Create a gripping, high-retention 28-36 second YouTube Short about: "{topic}"
 
 Target Audience: US & global viewers fascinated by space exploration, cosmic anomalies, astronomy, and astrophysics.
 Tone: Cinematic, mysterious, awe-inspiring, gripping, scientific.
 
 Return ONLY valid JSON with this exact structure:
 {{
-  "title": "Viral Cosmic title under 60 chars #shorts",
+  "title": "Complete, punchy Cosmic title strictly under 48 chars #shorts",
   "description": "Engaging description with 5 relevant astronomy and space hashtags",
   "scenes": [
     {{
-      "narration": "1-2 punchy spoken sentences for this scene with natural punctuation (commas, periods, question marks, dashes) to guide realistic voice pauses and intonation (plain text, no emojis or stage directions).",
+      "narration": "1-2 punchy spoken sentences (14-18 words per scene) with natural punctuation (commas, periods, question marks, dashes) to guide realistic voice pauses and intonation (plain text, no emojis or stage directions).",
       "search_query": "2-3 simple English keywords for stock video (e.g. 'galaxy spinning space', 'black hole event horizon', 'nebula stars deep space', 'earth from orbit', 'telescope night sky')",
       "image_prompt": "Cinematic visual description"
     }}
   ]
 }}
 Rules:
-- Create 4 to 5 scenes total.
-- Scene 1 narration MUST start with a complete, mind-blowing cosmic hook sentence under 8 words (e.g. 'Something is moving through our galaxy.') that stops scrolling in the first 1.5 seconds.
-- Final scene MUST end with a chilling cosmic question or awe-inspiring revelation.
+- Create 5 to 6 scenes total with 75 to 95 spoken words across ALL scenes combined (never under 70 words, so the video runs 28-36 seconds for strong watch time).
+- Scene 1 narration MUST open with a mind-blowing cosmic hook sentence under 8 words (e.g. 'Something is moving through our galaxy.') followed by 1 short escalation sentence.
+- Final scene MUST end with a thought-provoking 1-line comment question (e.g. 'Would you dare step through it? Tell me below.').
 - Use deliberate punctuation (commas, dashes) so speech synthesis flows with dramatic, human-like cadence.
 """
+        best_parsed = None
+        best_words = 0
         for model_name in ["gemini-flash-lite-latest", "gemini-flash-latest"]:
             for attempt in range(2):
                 try:
@@ -82,19 +108,24 @@ Rules:
                         match = re.search(r"\{.*\}", raw, re.DOTALL)
                         if match:
                             parsed = json.loads(match.group(0))
-                            if "scenes" in parsed and len(parsed["scenes"]) > 0:
-                                t_raw = parsed.get("title", topic).strip()
-                                t_raw = re.sub(r"#shorts", "", t_raw, flags=re.IGNORECASE).strip()
-                                if len(t_raw) > 55:
-                                    t_raw = t_raw[:55].rsplit(" ", 1)[0].rstrip(".,:-")
-                                parsed["title"] = f"{t_raw} #shorts"
-                                print(f"[OK] Script generated via Google Gemini API ({model_name}).")
-                                return parsed
+                            if "scenes" in parsed and len(parsed["scenes"]) >= 4:
+                                parsed["title"] = _clean_cosmic_title(parsed.get("title", topic))
+                                wc = sum(len(str(s.get("narration", "")).split()) for s in parsed["scenes"])
+                                if wc > best_words:
+                                    best_parsed = parsed
+                                    best_words = wc
+                                if wc >= 62:
+                                    print(f"[OK] Script generated via Google Gemini API ({model_name}, {wc} words).")
+                                    return parsed
+                                print(f"[WARN] Script too short ({wc} words < 62) on {model_name}; retrying for 28-36s target...")
                     else:
                         print(f"[WARN] Gemini model {model_name} attempt {attempt+1} returned status {resp.status_code}")
                 except Exception as exc:
                     print(f"[WARN] Gemini API call ({model_name}) attempt {attempt+1} failed: {exc}")
                 time.sleep(1.5)
+        if best_parsed is not None:
+            print(f"[OK] Using best Gemini script ({best_words} words).")
+            return best_parsed
 
     # Fallback script generator
     clean_topic = topic.strip().rstrip("?.!")
@@ -133,19 +164,24 @@ Rules:
 
 def generate_tts_with_word_timings(text: str, audio_path: Path) -> list[dict]:
     """
-    Synthesizes speech using edge-tts with precise word boundaries for dynamic captions.
-    Voice: en-US-ChristopherNeural with 1.1x speed (rate=+10%).
+    Synthesizes speech using edge-tts with channel-specific neural voice and precise word boundaries.
     """
-    voice = os.getenv("TTS_VOICE", "en-US-BrianNeural").strip()
-    if voice == "en-US-ChristopherNeural":
-        voice = "en-US-BrianNeural"
+    voice = os.getenv("TTS_VOICE", CHANNEL_DEFAULT_VOICE).strip()
+    if voice in ("", "en-US-ChristopherNeural", "en-US-BrianNeural"):
+        voice = CHANNEL_DEFAULT_VOICE
     word_timings = []
 
     clean_text = re.sub(r"[\*\_#`]+", "", text)
     clean_text = re.sub(r"^\d+[\.\)]\s*", "", clean_text).strip()
 
     async def _run():
-        communicate = edge_tts.Communicate(clean_text, voice, rate="+5%", boundary="WordBoundary")
+        communicate = edge_tts.Communicate(
+            clean_text,
+            voice,
+            rate=CHANNEL_TTS_RATE,
+            pitch=CHANNEL_TTS_PITCH,
+            boundary="WordBoundary",
+        )
         with open(audio_path, "wb") as f:
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
@@ -168,7 +204,7 @@ def generate_tts_with_word_timings(text: str, audio_path: Path) -> list[dict]:
         asyncio.run(_run())
     except Exception as e:
         print(f"[WARN] edge-tts stream failed: {e}. Retrying without word boundaries...")
-        communicate = edge_tts.Communicate(clean_text, voice, rate="+5%")
+        communicate = edge_tts.Communicate(clean_text, voice, rate=CHANNEL_TTS_RATE, pitch=CHANNEL_TTS_PITCH)
         asyncio.run(communicate.save(str(audio_path)))
         try:
             import wave
@@ -228,26 +264,34 @@ def group_words_into_captions(
     captions = []
     start_idx = 0
 
-    # Ensure Scene 1 opening hook (first 1.5 - 2.2s) is intact and complete
+    # Ensure Scene 1 opening hook is shown immediately at t=0.0 without overlap
     if is_hook_scene and len(word_timings) >= 2:
-        if len(word_timings) <= 8:
+        if len(word_timings) <= 6:
             hook_words = word_timings
+        elif len(word_timings) == 7:
+            hook_words = word_timings[:5]
         else:
             hook_words = []
-            for w in word_timings[:7]:
+            for w in word_timings[:6]:
                 hook_words.append(w)
-                if len(hook_words) >= 4 and w["end"] >= 1.6:
+                if len(hook_words) >= 4 and w["end"] >= 1.5:
                     break
-            # If remaining words are 2 or fewer, absorb into hook to avoid awkward leftovers
-            if len(word_timings) - len(hook_words) <= 2:
-                hook_words = word_timings
+            if len(word_timings) - len(hook_words) == 1:
+                hook_words = word_timings[:5]
 
         if hook_words:
             hook_text = " ".join(w["text"] for w in hook_words).upper()
+            hook_end = hook_words[-1]["end"]
+            if len(word_timings) > len(hook_words):
+                next_start = word_timings[len(hook_words)]["start"]
+                hook_end = min(max(hook_end, 1.4), next_start)
+            else:
+                hook_end = max(hook_end, min(total_duration, 1.6))
             captions.append({
                 "text": hook_text,
-                "start": hook_words[0]["start"],
-                "end": max(hook_words[-1]["end"], 1.6),
+                "start": 0.0,
+                "end": hook_end,
+                "is_hook": True,
             })
             start_idx = len(hook_words)
 
@@ -575,35 +619,47 @@ def get_bold_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def render_caption_overlay(text: str) -> np.ndarray:
+def render_caption_overlay(text: str, is_hook: bool = False) -> np.ndarray:
     """
-    Renders bold, centered text with gold highlight and thick black outline.
+    Renders bold centered captions with electric-cyan hook box and ice-cyan cosmic body text.
     """
     canvas = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
-    font = get_bold_font(78)
+    font = get_bold_font(84 if is_hook else 78)
 
-    wrapped = textwrap.fill(text, width=16)
+    wrapped = textwrap.fill(text, width=15 if is_hook else 16)
     bbox = draw.multiline_textbbox((0, 0), wrapped, font=font, align="center", spacing=12)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
 
     x = (VIDEO_WIDTH - text_w) // 2
-    y = int(VIDEO_HEIGHT * 0.62) - (text_h // 2)
+    y_anchor = 0.48 if is_hook else 0.62
+    y = int(VIDEO_HEIGHT * y_anchor) - (text_h // 2)
 
-    pad_x, pad_y = 36, 22
-    draw.rounded_rectangle(
-        [x - pad_x, y - pad_y, x + text_w + pad_x, y + text_h + pad_y],
-        radius=28,
-        fill=(0, 0, 0, 160),
-    )
+    pad_x, pad_y = (40, 26) if is_hook else (36, 22)
+    box_coords = [x - pad_x, y - pad_y, x + text_w + pad_x, y + text_h + pad_y]
+    if is_hook:
+        draw.rounded_rectangle(
+            box_coords,
+            radius=28,
+            fill=(0, 0, 0, 210),
+            outline=(56, 189, 248, 255),
+            width=5,
+        )
+        text_fill = (255, 255, 255, 255)
+    else:
+        draw.rounded_rectangle(
+            box_coords,
+            radius=28,
+            fill=(0, 0, 0, 160),
+        )
+        text_fill = (186, 230, 253, 255)
 
-    # Gold / Yellow text with thick black stroke
     draw.multiline_text(
         (x, y),
         wrapped,
         font=font,
-        fill=(255, 215, 0, 255),  # Electric Gold
+        fill=text_fill,
         align="center",
         spacing=12,
         stroke_width=8,
@@ -657,6 +713,7 @@ def build_shorts_video(topic: str) -> Path:
                 "text": cap["text"],
                 "start": cumulative_time + cap["start"],
                 "end": cumulative_time + cap["end"],
+                "is_hook": cap.get("is_hook", False),
             })
         cumulative_time += scene_dur
 
@@ -727,7 +784,7 @@ def build_shorts_video(topic: str) -> Path:
     caption_clips = []
     for cap in all_captions:
         dur = max(0.2, cap["end"] - cap["start"])
-        overlay_arr = render_caption_overlay(cap["text"])
+        overlay_arr = render_caption_overlay(cap["text"], is_hook=cap.get("is_hook", False))
         c_clip = (
             ImageClip(overlay_arr)
             .with_start(cap["start"])

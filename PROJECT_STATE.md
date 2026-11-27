@@ -1,12 +1,13 @@
 # PROJECT_STATE.md
 
 ## Done
-- Removed `"3d"`, `"animation"`, `"vfx"`, `"loop"` over-filtering from `FORBIDDEN_TAGS` in `main.py` and `long_form_cosmic.py`, and added `video_type=all` fallback after `video_type=film` so space/black-hole/exoplanet simulations are available while pixel-level green-screen rejection remains active.
-- Expanded `CURATED_COSMIC_QUERIES` (10 -> 18) and `REQUIRED_COSMIC_CONCEPTS` to eliminate exhausted Pixabay queries.
-- Hardened `main.py` Gemini call (`responseMimeType: "application/json"` + retry) and updated `auto_pilot.py` to deduplicate against `past_topics[-80:]` with curiosity-question hooks.
+- Assigned dedicated voice (`en-US-BrianMultilingualNeural`, `rate=+3%`, `pitch=-2Hz`) and electric-cyan instant `t=0.0` hook caption identity in `main.py`.
+- Upgraded script prompt to 5–6 scenes / 75–95 words (28–36s target) with `<62`-word retry guard, closing comment question, and `_clean_cosmic_title`.
+- Added topic + title token-overlap deduplication (`_is_duplicate_cosmic_item`, `_ensure_unique_title`) in `auto_pilot.py`.
+- Focused Shorts to 1x/day US prime-time (`20:30 UTC`, 18h spacing in `uploader.py` & `daily_cosmic_shorts.yml`) and paused auto-cron on `weekly_long_cosmic.yml` (manual `workflow_dispatch` preserved while `0-view` long-form hurts retention); verified with `py_compile` + unit checks.
 
 ## Current State
-- `youtube-shorts-cosmic-bot` updated and verified (`py_compile` + Gemini smoke test + Pixabay pool check).
+- `youtube-shorts-cosmic-bot` updated, verified, and pushed to `origin/main`.
 
 ## Next Step
-- Monitor upcoming Cosmic Shorts (`20:30` / `00:30 UTC`) for Shorts feed distribution recovery.
+- Monitor 1x/day Cosmic Shorts (`20:30 UTC`) recovery over the next 5–7 days before re-enabling long-form cron.

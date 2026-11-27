@@ -1,9 +1,7 @@
 name: Cosmic Secrets Long-Form Documentary Generator
 
 on:
-  schedule:
-    # Twice a week (Tuesday & Saturday at 20:00 TRT = 17:00 UTC)
-    - cron: '0 17 * * 2,6'
+  # Auto-schedule paused while channel builds Shorts baseline (manual trigger preserved):
   workflow_dispatch:
 
 permissions:
